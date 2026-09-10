@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NHPD Property Finder</title>
+<style>
+  :root{
+    --bg:#151A21; --panel:#1B222B; --panel-2:#212A35; --line:#2C3743;
+    --ink:#E6EDF3; --muted:#93A3B4; --faint:#6B7B8C;
+    --accent:#2F7D62; --accent-soft:#1E3A32; --accent-ink:#5FBF9B;
+    --danger:#9E3B37;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --num:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --rail:310px;
+  }
+  :root[data-theme="light"]{
+    --bg:#F7F8FA; --panel:#FFFFFF; --panel-2:#F0F3F6; --line:#DCE3EA;
+    --ink:#161C24; --muted:#54636F; --faint:#7D8B99;
+    --accent:#276B54; --accent-soft:#E2EFE9; --accent-ink:#276B54;
+    --danger:#8E332F;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:13px;
+       -webkit-font-smoothing:antialiased;overflow:hidden}
+  .num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+  /* ---------- shell ---------- */
+  #app{display:grid;grid-template-columns:var(--rail) 1fr;height:100vh}
+  #rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  #main{display:flex;flex-direction:column;min-width:0;min-height:0}
+
+  .brand{padding:16px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px}
+  .brand b{font-size:13.5px;letter-spacing:.02em}
+  .brand span{font-size:10.5px;color:var(--faint);letter-spacing:.14em;text-transform:uppercase}
+
+  #rail-body{overflow-y:auto;flex:1;padding:4px 18px 18px}
+  .grp{margin-top:18px}
+  .grp>h3{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);
+          margin:0 0 9px;font-weight:700}
+  label.fl{display:block;font-size:11px;color:var(--muted);margin:10px 0 4px}
+
+  input[type=text],input[type=number],select{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    border-radius:4px;padding:6px 8px;font-size:12.5px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  select[multiple]{height:104px;padding:4px}
+  select[multiple] option{padding:3px 6px;border-radius:3px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  .chk{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer;font-size:12.5px}
+  .chk input{accent-color:var(--accent);width:13px;height:13px;margin:0;cursor:pointer}
+  .chk span{color:var(--ink)}
+  .more{background:none;border:none;color:var(--accent-ink);font-size:11.5px;cursor:pointer;
+        padding:6px 0 0;font-family:inherit}
+  .more:hover{text-decoration:underline}
+
+  #clear{width:100%;margin-top:18px;background:transparent;border:1px solid var(--danger);
+         color:var(--danger);border-radius:4px;padding:7px;font-size:12px;cursor:pointer;font-family:inherit}
+  #clear:hover{background:var(--danger);color:#fff}
+
+  /* ---------- summary ---------- */
+  #tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);
+         border-bottom:1px solid var(--line)}
+  .tile{background:var(--panel);padding:11px 16px}
+  .tile .k{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .tile .v{font-size:20px;font-weight:600;margin-top:3px;color:var(--ink)}
+  .tile.hero .v{color:var(--accent-ink)}
+
+  /* ---------- toolbar ---------- */
+  #bar{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line);
+       background:var(--panel);flex-wrap:wrap}
+  #count{color:var(--muted);font-size:12px;margin-right:auto}
+  #count b{color:var(--ink)}
+  .btn{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:4px;
+       padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.12)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+
+  #views{display:flex}
+  .btn.seg{border-radius:0;margin:0}
+  .btn.seg:first-child{border-radius:4px 0 0 4px}
+  .btn.seg:last-child{border-radius:0 4px 4px 0;border-left:none}
+  .btn.seg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px}
+  #chips:not(:empty){padding:9px 16px;border-bottom:1px solid var(--line)}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);
+        border:1px solid var(--accent);color:var(--accent-ink);border-radius:3px;
+        padding:2px 6px;font-size:11px}
+  .chip b{font-weight:600}
+  .chip button{background:none;border:none;color:inherit;cursor:pointer;font-size:13px;
+               line-height:1;padding:0}
+
+  /* ---------- table ---------- */
+  #wrap{flex:1;overflow:auto;min-height:0}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  thead th{position:sticky;top:0;background:var(--panel-2);color:var(--muted);text-align:left;
+           font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+           padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;z-index:2}
+  thead th:hover{color:var(--accent-ink)}
+  thead th .ar{color:var(--accent-ink);margin-left:3px}
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;
+           overflow:hidden;text-overflow:ellipsis;max-width:280px}
+  tbody tr:hover td{background:var(--panel)}
+  td.n{text-align:right;font-family:var(--num);font-variant-numeric:tabular-nums}
+
+  #pager{display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:1px solid var(--line);
+         background:var(--panel);font-size:12px;color:var(--muted)}
+
+  /* ---------- loader / empty ---------- */
+  .center{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+  .card{max-width:440px;text-align:center}
+  .card h2{font-size:19px;margin:0 0 8px;font-weight:600}
+  .card p{color:var(--muted);line-height:1.6;margin:0 0 18px;font-size:13px}
+  .drop{border:1px dashed var(--line);border-radius:6px;padding:26px;background:var(--panel)}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  #theme{position:absolute;top:14px;right:16px;background:none;border:1px solid var(--line);
+         color:var(--muted);border-radius:4px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:inherit}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<button id="theme" type="button">Light</button>
+
+<div id="app">
+  <aside id="rail">
+    <div class="brand"><b>Property Finder</b><span>NHPD</span></div>
+    <div id="rail-body">
+
+      <div class="grp">
+        <h3>Location</h3>
+        <label class="fl" for="f-state">State <span id="n-state" class="faint"></span></label>
+        <select id="f-state" multiple></select>
+        <label class="fl" for="f-county">County</label>
+        <select id="f-county" multiple></select>
+        <label class="fl" for="f-city">City contains</label>
+        <input type="text" id="f-city" placeholder="e.g. Atlanta" autocomplete="off">
+      </div>
+
+      <div class="grp">
+        <h3>Ownership</h3>
+        <label class="fl">Owner type</label>
+        <div id="f-ownertype"></div>
+        <label class="fl" for="f-owner">Owner name contains</label>
+        <input type="text" id="f-owner" placeholder="e.g. housing authority" autocomplete="off">
+        <label class="fl" for="f-manager">Manager name contains</label>
+        <input type="text" id="f-manager" placeholder="e.g. related" autocomplete="off">
+      </div>
+
+      <div class="grp">
+        <h3>Funding programs</h3>
+        <div id="f-progs-main"></div>
+        <div id="f-progs-more" class="hide"></div>
+        <button class="more" id="progs-toggle" type="button">Show 10 more</button>
+      </div>
+
+      <div class="grp">
+        <h3>Size &amp; occupancy</h3>
+        <label class="fl">Total units</label>
+        <div class="row2">
+          <input type="number" id="f-umin" placeholder="min" autocomplete="off">
+          <input type="number" id="f-umax" placeholder="max" autocomplete="off">
+        </div>
+        <label class="fl">Occupancy rate (%)</label>
+        <div class="row2">
+          <input type="number" id="f-omin" placeholder="min" autocomplete="off">
+          <input type="number" id="f-omax" placeholder="max" autocomplete="off">
+        </div>
+      </div>
+
+      <button id="clear" type="button">Clear all filters</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- loader -->
+    <div id="loader" class="center">
+      <div class="card">
+        <h2>Load your property file</h2>
+        <p>Point this at the NHPD property database (<b>.xlsx</b> or .csv). Everything runs locally
+           in this browser tab &mdash; no data is uploaded anywhere.</p>
+        <div class="drop" id="drop">
+          <input type="file" id="file" accept=".xlsx,.csv">
+          <p style="margin:14px 0 0;font-size:12px">or drag the file here</p>
+        </div>
+        <p id="perr" style="color:var(--danger);margin-top:14px"></p>
+      </div>
+    </div>
+
+    <!-- app -->
+    <div id="ui" class="hide" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="tiles">
+        <div class="tile hero"><div class="k">Properties shown</div><div class="v num" id="t-props">0</div></div>
+        <div class="tile"><div class="k">Total units</div><div class="v num" id="t-units">0</div></div>
+        <div class="tile"><div class="k">Assisted units</div><div class="v num" id="t-assist">0</div></div>
+        <div class="tile"><div class="k">Avg occupancy</div><div class="v num" id="t-occ">&mdash;</div></div>
+        <div class="tile"><div class="k">Avg % ELI</div><div class="v num" id="t-eli">&mdash;</div></div>
+      </div>
+      <div id="bar">
+        <div id="views">
+          <button class="btn seg on" id="v-props" type="button">Properties</button><button class="btn seg" id="v-pivot" type="button">Summary</button>
+        </div>
+        <select id="groupby" class="hide" style="width:auto">
+          <option value="Owner Name">Group by owner</option>
+          <option value="Manager Name">Group by manager</option>
+        </select>
+        <div id="count"></div>
+        <button class="btn" id="copy" type="button">Copy summary</button>
+        <button class="btn" id="exp-csv" type="button">Export CSV</button>
+        <button class="btn primary" id="exp-xlsx" type="button">Export Excel</button>
+      </div>
+      <div id="chips"></div>
+      <div id="wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+      <div id="pager">
+        <button class="btn" id="prev" type="button">Prev</button>
+        <span id="pinfo"></span>
+        <button class="btn" id="next" type="button">Next</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ══════════════ CORE START ══════════════ */
+/* Pure data logic. Shared verbatim with the node test harness — keep free of DOM. */
+
+var PROGRAMS = ['Public Housing','Project-Based Section 8','LIHTC','Section 515','Section 538','HOME',
+  'HUD Insured Mortgage','Section 202','Section 236','NHTF','Project-Based Vouchers','Mod Rehab',
+  'State-Funded','Section 514','Section 521','Section 811'];
+
+/* RFC4180-ish CSV parser: handles quoted fields, embedded commas/quotes/newlines. */
+function parseCSV(text){
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  var rows=[], row=[], val='', q=false, i=0, n=text.length;
+  while(i<n){
+    var c=text[i];
+    if(q){
+      if(c === '"'){
+        if(text[i+1] === '"'){ val+='"'; i+=2; continue; }
+        q=false; i++; continue;
+      }
+      val+=c; i++; continue;
+    }
+    if(c === '"'){ q=true; i++; continue; }
+    if(c === ','){ row.push(val); val=''; i++; continue; }
+    if(c === '\r'){ i++; continue; }
+    if(c === '\n'){ row.push(val); rows.push(row); row=[]; val=''; i++; continue; }
+    val+=c; i++;
+  }
+  if(val.length || row.length){ row.push(val); rows.push(row); }
+  return rows;
+}
+
+/* Rows -> array of objects keyed by header name. */
+function toObjects(rows){
+  if(!rows.length) return {headers:[], data:[]};
+  var headers = rows[0].map(function(h){ return String(h).trim(); });
+  var data = [];
+  for(var r=1; r<rows.length; r++){
+    var raw = rows[r];
+    if(raw.length === 1 && raw[0] === '') continue;   // skip blank line
+    var o = {};
+    for(var c=0; c<headers.length; c++) o[headers[c]] = raw[c] === undefined ? '' : raw[c];
+    data.push(o);
+  }
+  return {headers:headers, data:data};
+}
+
+/* Blank-safe number read. Returns null when not a usable number, so averages can skip it
+   the same way Excel's AVERAGE ignores empty cells. */
+function num(v){
+  if(v === null || v === undefined) return null;
+  var s = String(v).trim();
+  if(s === '') return null;
+  var x = Number(s.replace(/[$,%\s]/g,''));
+  return isFinite(x) ? x : null;
+}
+
+function has(hay, needle){
+  if(!needle) return true;
+  return String(hay === undefined || hay === null ? '' : hay).toLowerCase().indexOf(needle.toLowerCase()) !== -1;
+}
+
+/* The single filter predicate. f = {states:[], counties:[], city:'', ownerTypes:[],
+   owner:'', manager:'', progs:[], umin,umax,omin,omax} */
+function applyFilters(data, f){
+  var out = [];
+  for(var i=0;i<data.length;i++){
+    var r = data[i];
+    if(f.states.length && f.states.indexOf(r['State']) === -1) continue;
+    if(f.counties.length && f.counties.indexOf(r['County']) === -1) continue;
+    if(!has(r['City'], f.city)) continue;
+    if(f.ownerTypes.length && f.ownerTypes.indexOf(r['Owner Type']) === -1) continue;
+    if(!has(r['Owner Name'], f.owner)) continue;
+    if(!has(r['Manager Name'], f.manager)) continue;
+
+    var ok = true;
+    for(var p=0;p<f.progs.length;p++){
+      if(String(r[f.progs[p]]).trim() !== 'Yes'){ ok=false; break; }
+    }
+    if(!ok) continue;
+
+    var u = num(r['Total Units']);
+    if(f.umin !== null && (u === null || u < f.umin)) continue;
+    if(f.umax !== null && (u === null || u > f.umax)) continue;
+    var o = num(r['Occupancy Rate']);
+    if(f.omin !== null && (o === null || o < f.omin)) continue;
+    if(f.omax !== null && (o === null || o > f.omax)) continue;
+
+    out.push(r);
+  }
+  return out;
+}
+
+/* Summary tiles. Sums ignore blanks; averages ignore blanks (Excel AVERAGE semantics). */
+function summarise(rows){
+  var units=0, assisted=0, occSum=0, occN=0, eliSum=0, eliN=0;
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    var u=num(r['Total Units']);        if(u!==null) units+=u;
+    var a=num(r['Assisted Units']);     if(a!==null) assisted+=a;
+    var o=num(r['Occupancy Rate']);     if(o!==null){ occSum+=o; occN++; }
+    var e=num(r['% Extremely Low-Income']); if(e!==null){ eliSum+=e; eliN++; }
+  }
+  return {
+    properties: rows.length,
+    totalUnits: units,
+    assistedUnits: assisted,
+    avgOccupancy: occN ? occSum/occN : null,
+    avgELI: eliN ? eliSum/eliN : null
+  };
+}
+
+function emptyFilters(){
+  return {states:[],counties:[],city:'',ownerTypes:[],owner:'',manager:'',progs:[],
+          umin:null,umax:null,omin:null,omax:null};
+}
+
+/* Group the filtered rows by owner or manager — the pivot view.
+   One output row per distinct name: how many buildings, how many units.
+   Blank names are kept together rather than silently dropped. */
+function pivot(rows, key){
+  var map = Object.create(null), order = [];
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i];
+    var raw = r[key];
+    var name = (raw === undefined || raw === null || String(raw).trim() === '')
+             ? '(not listed)' : String(raw).trim();
+    var g = map[name];
+    if(!g){ g = map[name] = {group:name, properties:0, totalUnits:0, assistedUnits:0,
+                             _occSum:0, _occN:0, states:Object.create(null)};
+            order.push(name); }
+    g.properties++;
+    var u = num(r['Total Units']);    if(u!==null) g.totalUnits += u;
+    var a = num(r['Assisted Units']); if(a!==null) g.assistedUnits += a;
+    var o = num(r['Occupancy Rate']); if(o!==null){ g._occSum += o; g._occN++; }
+    if(r['State']) g.states[r['State']] = 1;
+  }
+  var out = [];
+  for(var k=0;k<order.length;k++){
+    var g = map[order[k]];
+    out.push({group:g.group, properties:g.properties, totalUnits:g.totalUnits,
+              assistedUnits:g.assistedUnits,
+              avgOccupancy: g._occN ? g._occSum/g._occN : null,
+              states: Object.keys(g.states).sort().join(', ')});
+  }
+  out.sort(function(a,b){ return b.properties - a.properties || b.totalUnits - a.totalUnits; });
+  return out;
+}
+
+/* ---------- .xlsx reader (no external library) ----------
+   An .xlsx is a ZIP of XML parts. We read the ZIP central directory ourselves and
+   inflate entries with the browser's native DecompressionStream, then pull the cells
+   out of the sheet XML. Node 18+ has DecompressionStream too, so this is testable. */
+
+function zipEntries(buf){
+  var dv = new DataView(buf), n = buf.byteLength;
+  var eocd = -1;
+  for(var i = n - 22; i >= 0 && i > n - 66000; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error('Not a valid .xlsx file (no ZIP directory found).');
+  var count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  var entries = {}, p = cdOff, dec = new TextDecoder();
+  for(var e = 0; e < count; e++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    var method = dv.getUint16(p + 10, true);
+    var csize  = dv.getUint32(p + 20, true);
+    var usize  = dv.getUint32(p + 24, true);
+    var nameLen = dv.getUint16(p + 28, true);
+    var extraLen = dv.getUint16(p + 30, true);
+    var cmtLen = dv.getUint16(p + 32, true);
+    var lho    = dv.getUint32(p + 42, true);
+    var name = dec.decode(new Uint8Array(buf, p + 46, nameLen));
+    entries[name] = {method:method, csize:csize, usize:usize, lho:lho};
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  return {dv:dv, buf:buf, entries:entries};
+}
+
+function readEntry(zip, name){
+  var e = zip.entries[name];
+  if(!e) return Promise.resolve(null);
+  var dv = zip.dv;
+  if(dv.getUint32(e.lho, true) !== 0x04034b50) return Promise.reject(new Error('Corrupt entry: '+name));
+  var nameLen = dv.getUint16(e.lho + 26, true), extraLen = dv.getUint16(e.lho + 28, true);
+  var start = e.lho + 30 + nameLen + extraLen;
+  var raw = new Uint8Array(zip.buf, start, e.csize);
+  if(e.method === 0) return Promise.resolve(new TextDecoder().decode(raw));
+  if(e.method !== 8) return Promise.reject(new Error('Unsupported compression in '+name));
+  if(typeof DecompressionStream === 'undefined')
+    return Promise.reject(new Error('This browser cannot read .xlsx directly. Use Chrome or Edge, or export the sheet as .csv.'));
+  var ds = new DecompressionStream('deflate-raw');
+  var stream = new Blob([raw]).stream().pipeThrough(ds);
+  return new Response(stream).text();
+}
+
+function xmlUnesc(s){
+  if(s.indexOf('&') === -1) return s;
+  return s.replace(/&#x([0-9a-fA-F]+);/g, function(_,h){ return String.fromCharCode(parseInt(h,16)); })
+          .replace(/&#(\d+);/g, function(_,d){ return String.fromCharCode(+d); })
+          .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+          .replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+}
+
+/* Shared strings table: one entry per <si>, text = all <t> pieces concatenated. */
+function parseSharedStrings(xml){
+  var out = [];
+  if(!xml) return out;
+  var si = /<si\b[^>]*>([\s\S]*?)<\/si>/g, m;
+  while((m = si.exec(xml))){
+    var inner = m[1], t = /<t\b[^>]*>([\s\S]*?)<\/t>/g, parts = [], tm;
+    while((tm = t.exec(inner))) parts.push(tm[1]);
+    out.push(xmlUnesc(parts.join('')));
+  }
+  return out;
+}
+
+function colIndex(ref){
+  var i = 0, k = 0;
+  while(k < ref.length){
+    var c = ref.charCodeAt(k);
+    if(c < 65 || c > 90) break;
+    i = i * 26 + (c - 64); k++;
+  }
+  return i - 1;
+}
+
+/* Sheet XML -> array of arrays. Honours cell refs so gaps stay aligned. */
+function parseSheet(xml, shared){
+  var rows = [];
+  var rowRe = /<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b[^>]*\/>/g, rm;
+  while((rm = rowRe.exec(xml))){
+    var inner = rm[2] || '', cells = [];
+    var cRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, cm;
+    while((cm = cRe.exec(inner))){
+      var attrs = cm[1] || '', body = cm[2] || '';
+      var refM = /r="([A-Z]+)\d+"/.exec(attrs);
+      var idx = refM ? colIndex(refM[1]) : cells.length;
+      var tM = /t="([^"]+)"/.exec(attrs);
+      var type = tM ? tM[1] : 'n';
+      var val = '';
+      if(type === 'inlineStr'){
+        var parts = [], t2 = /<t\b[^>]*>([\s\S]*?)<\/t>/g, tm2;
+        while((tm2 = t2.exec(body))) parts.push(tm2[1]);
+        val = xmlUnesc(parts.join(''));
+      } else {
+        var vM = /<v\b[^>]*>([\s\S]*?)<\/v>/.exec(body);
+        if(vM){
+          if(type === 's'){ var si = +vM[1]; val = shared[si] === undefined ? '' : shared[si]; }
+          else val = xmlUnesc(vM[1]);
+        }
+      }
+      while(cells.length < idx) cells.push('');
+      cells[idx] = val;
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+/* Resolve the first sheet's part name via workbook rels, falling back to sheet1.xml. */
+function firstSheetPath(workbookXml, relsXml){
+  try{
+    var idM = /<sheet\b[^>]*r:id="([^"]+)"/.exec(workbookXml || '');
+    if(idM && relsXml){
+      var re = new RegExp('<Relationship\\b[^>]*Id="'+idM[1]+'"[^>]*Target="([^"]+)"');
+      var tM = re.exec(relsXml);
+      if(tM){
+        var t = tM[1].replace(/^\//,'');
+        return t.indexOf('xl/') === 0 ? t : 'xl/'+t;
+      }
+    }
+  }catch(e){}
+  return 'xl/worksheets/sheet1.xml';
+}
+
+function readXLSX(arrayBuffer){
+  var zip = zipEntries(arrayBuffer);
+  return Promise.all([
+    readEntry(zip, 'xl/sharedStrings.xml'),
+    readEntry(zip, 'xl/workbook.xml'),
+    readEntry(zip, 'xl/_rels/workbook.xml.rels')
+  ]).then(function(res){
+    var shared = parseSharedStrings(res[0]);
+    var path = firstSheetPath(res[1], res[2]);
+    return readEntry(zip, path).then(function(sheetXml){
+      if(!sheetXml) throw new Error('Could not find the worksheet inside that .xlsx.');
+      return toObjects(parseSheet(sheetXml, shared));
+    });
+  });
+}
+
+if (typeof module !== 'undefined' && module.exports){
+  module.exports = {parseCSV:parseCSV, toObjects:toObjects, applyFilters:applyFilters,
+                    summarise:summarise, emptyFilters:emptyFilters, num:num, PROGRAMS:PROGRAMS,
+                    readXLSX:readXLSX, zipEntries:zipEntries, parseSheet:parseSheet, pivot:pivot,
+                    parseSharedStrings:parseSharedStrings, colIndex:colIndex};
+}
+/* ══════════════ CORE END ══════════════ */
+
+
+/* ─────────────── UI ─────────────── */
+(function(){
+  if (typeof document === 'undefined') return;   // node test: stop here
+
+  var COLS = ['NHPDPropertyID','Property Name','Property Address','City','State','Zip','County',
+    'Property Status','Primary Funding Stream','Owner Name','Owner Type','Manager Name','Manager Type',
+    'Total Units','Assisted Units','Occupancy Rate','% Extremely Low-Income'];
+  var NUMCOLS = {'Total Units':1,'Assisted Units':1,'Occupancy Rate':1,'% Extremely Low-Income':1,'NHPDPropertyID':1};
+  var PAGE = 50;
+
+  var DATA = [], HEADERS = [], VIEW = [], PIV = [], page = 0, sortCol = null, sortDir = 1;
+  var MODE = 'props', GROUPKEY = 'Owner Name';
+  var PIVCOLS = [
+    {k:'group',        label:'Name',           n:false},
+    {k:'properties',   label:'Buildings',      n:true},
+    {k:'totalUnits',   label:'Total Units',    n:true},
+    {k:'assistedUnits',label:'Assisted Units', n:true},
+    {k:'avgOccupancy', label:'Avg Occupancy',  n:true, pct:true},
+    {k:'states',       label:'States',         n:false}
+  ];
+  var F = emptyFilters();
+  var $ = function(id){ return document.getElementById(id); };
+
+  var fmt = function(n){ return n === null || n === undefined ? '—' : Math.round(n).toLocaleString('en-US'); };
+  var pct = function(n){ return n === null ? '—' : n.toFixed(1)+'%'; };
+
+  /* ---------- theme ---------- */
+  $('theme').onclick = function(){
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    document.documentElement.setAttribute('data-theme', light ? 'dark' : 'light');
+    this.textContent = light ? 'Light' : 'Dark';
+  };
+
+  /* ---------- load ---------- */
+  function adopt(parsed){
+    if(!parsed.data.length) throw new Error('No data rows found in that file.');
+    if(parsed.headers.indexOf('State') === -1)
+      throw new Error('This does not look like an NHPD property export (no "State" column).');
+    HEADERS = parsed.headers; DATA = parsed.data;
+    $('loader').classList.add('hide'); $('ui').classList.remove('hide');
+    buildControls(); refresh();
+  }
+  function fail(msg){ $('perr').textContent = msg; }
+
+  function loadFile(f){
+    if(!f) return;
+    var isExcel = /\.xlsx$/i.test(f.name);
+    if(/\.xls$/i.test(f.name)){
+      return fail('Old .xls files are not supported — save it as .xlsx and try again.');
+    }
+    $('perr').textContent = 'Reading ' + f.name + '…';
+    var fr = new FileReader();
+    fr.onerror = function(){ fail('Could not read that file.'); };
+    fr.onload = function(ev){
+      try{
+        if(isExcel){
+          $('perr').textContent = 'Unpacking workbook…';
+          readXLSX(ev.target.result).then(function(parsed){
+            try{ adopt(parsed); }catch(e){ fail(e.message); }
+          }, function(err){ fail(err.message); });
+        } else {
+          adopt(toObjects(parseCSV(ev.target.result)));
+        }
+      }catch(e){ fail(e.message); }
+    };
+    if(isExcel) fr.readAsArrayBuffer(f); else fr.readAsText(f);
+  }
+
+  $('file').onchange = function(e){ loadFile(e.target.files[0]); };
+  var drop = $('drop');
+  ['dragenter','dragover'].forEach(function(t){
+    drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave','drop'].forEach(function(t){
+    drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function(e){ loadFile(e.dataTransfer.files[0]); });
+
+  /* ---------- controls ---------- */
+  function uniq(col){
+    var seen = Object.create(null), out = [];
+    for(var i=0;i<DATA.length;i++){
+      var v = DATA[i][col];
+      if(v !== undefined && v !== null && v !== '' && !seen[v]){ seen[v]=1; out.push(v); }
+    }
+    return out.sort();
+  }
+  function fillSelect(el, vals){
+    el.innerHTML = '';
+    vals.forEach(function(v){
+      var o = document.createElement('option'); o.value = v; o.textContent = v; el.appendChild(o);
+    });
+  }
+  function checks(host, vals, onchange){
+    host.innerHTML = '';
+    vals.forEach(function(v){
+      var l = document.createElement('label'); l.className = 'chk';
+      var i = document.createElement('input'); i.type = 'checkbox'; i.value = v;
+      i.onchange = onchange;
+      var s = document.createElement('span'); s.textContent = v;
+      l.appendChild(i); l.appendChild(s); host.appendChild(l);
+    });
+  }
+  function picked(host){
+    return Array.prototype.slice.call(host.querySelectorAll('input:checked')).map(function(i){ return i.value; });
+  }
+
+  function buildControls(){
+    fillSelect($('f-state'), uniq('State'));
+    fillSelect($('f-county'), uniq('County'));
+    checks($('f-ownertype'), uniq('Owner Type'), read);
+    var present = PROGRAMS.filter(function(p){ return HEADERS.indexOf(p) !== -1; });
+    checks($('f-progs-main'), present.slice(0,6), read);
+    checks($('f-progs-more'), present.slice(6), read);
+    $('progs-toggle').textContent = 'Show ' + Math.max(0, present.length-6) + ' more';
+  }
+  $('progs-toggle').onclick = function(){
+    var m = $('f-progs-more'), hidden = m.classList.contains('hide');
+    m.classList.toggle('hide');
+    this.textContent = hidden ? 'Show fewer' : 'Show ' + m.children.length + ' more';
+  };
+
+  /* County list narrows to the chosen states — avoids scrolling 1,800 counties. */
+  function narrowCounties(){
+    var keep = F.states;
+    var vals;
+    if(!keep.length){ vals = uniq('County'); }
+    else{
+      var seen = Object.create(null); vals = [];
+      for(var i=0;i<DATA.length;i++){
+        var r = DATA[i];
+        if(keep.indexOf(r['State']) === -1) continue;
+        var c = r['County'];
+        if(c && !seen[c]){ seen[c]=1; vals.push(c); }
+      }
+      vals.sort();
+    }
+    var prev = F.counties;
+    fillSelect($('f-county'), vals);
+    Array.prototype.slice.call($('f-county').options).forEach(function(o){
+      if(prev.indexOf(o.value) !== -1) o.selected = true;
+    });
+    F.counties = picked2($('f-county'));
+  }
+  function picked2(sel){
+    return Array.prototype.slice.call(sel.selectedOptions).map(function(o){ return o.value; });
+  }
+
+  var timer = null;
+  function debounce(fn){ clearTimeout(timer); timer = setTimeout(fn, 160); }
+
+  function read(){
+    var before = F.states.join('|');
+    F.states     = picked2($('f-state'));
+    if(F.states.join('|') !== before) narrowCounties();
+    F.counties   = picked2($('f-county'));
+    F.city       = $('f-city').value.trim();
+    F.ownerTypes = picked($('f-ownertype'));
+    F.owner      = $('f-owner').value.trim();
+    F.manager    = $('f-manager').value.trim();
+    F.progs      = picked($('f-progs-main')).concat(picked($('f-progs-more')));
+    F.umin = num($('f-umin').value); F.umax = num($('f-umax').value);
+    F.omin = num($('f-omin').value); F.omax = num($('f-omax').value);
+    page = 0; refresh();
+  }
+  ['f-state','f-county'].forEach(function(id){ $(id).onchange = read; });
+  ['f-city','f-owner','f-manager','f-umin','f-umax','f-omin','f-omax'].forEach(function(id){
+    $(id).oninput = function(){ debounce(read); };
+  });
+  $('clear').onclick = function(){
+    F = emptyFilters();
+    ['f-city','f-owner','f-manager','f-umin','f-umax','f-omin','f-omax'].forEach(function(id){ $(id).value=''; });
+    [$('f-state'),$('f-county')].forEach(function(s){
+      Array.prototype.slice.call(s.options).forEach(function(o){ o.selected=false; });
+    });
+    document.querySelectorAll('#f-ownertype input,#f-progs-main input,#f-progs-more input')
+      .forEach(function(i){ i.checked=false; });
+    narrowCounties(); page=0; refresh();
+  };
+
+  /* ---------- view switch ---------- */
+  function setMode(m){
+    MODE = m; page = 0; sortCol = null; sortDir = 1;
+    $('v-props').classList.toggle('on', m === 'props');
+    $('v-pivot').classList.toggle('on', m === 'pivot');
+    $('groupby').classList.toggle('hide', m !== 'pivot');
+    refresh();
+  }
+  $('v-props').onclick = function(){ setMode('props'); };
+  $('v-pivot').onclick = function(){ setMode('pivot'); };
+  $('groupby').onchange = function(){ GROUPKEY = this.value; page = 0; refresh(); };
+
+  /* ---------- chips ---------- */
+  function chips(){
+    var host = $('chips'); host.innerHTML='';
+    function add(label, val, undo){
+      var c = document.createElement('span'); c.className='chip';
+      var b = document.createElement('b'); b.textContent = label+':';
+      var t = document.createTextNode(' '+val+' ');
+      var x = document.createElement('button'); x.type='button'; x.textContent='×';
+      x.setAttribute('aria-label','Remove '+label+' filter');
+      x.onclick = undo;
+      c.appendChild(b); c.appendChild(t); c.appendChild(x); host.appendChild(c);
+    }
+    if(F.states.length) add('State', F.states.join(', '), function(){
+      Array.prototype.slice.call($('f-state').options).forEach(function(o){o.selected=false;}); read();
+    });
+    if(F.counties.length) add('County', F.counties.join(', '), function(){
+      Array.prototype.slice.call($('f-county').options).forEach(function(o){o.selected=false;}); read();
+    });
+    if(F.city) add('City', F.city, function(){ $('f-city').value=''; read(); });
+    if(F.ownerTypes.length) add('Owner type', F.ownerTypes.join(', '), function(){
+      document.querySelectorAll('#f-ownertype input').forEach(function(i){i.checked=false;}); read();
+    });
+    if(F.owner) add('Owner', F.owner, function(){ $('f-owner').value=''; read(); });
+    if(F.manager) add('Manager', F.manager, function(){ $('f-manager').value=''; read(); });
+    F.progs.forEach(function(p){
+      add('Program', p, function(){
+        document.querySelectorAll('#f-progs-main input,#f-progs-more input').forEach(function(i){
+          if(i.value===p) i.checked=false;
+        });
+        read();
+      });
+    });
+    if(F.umin!==null||F.umax!==null) add('Units',(F.umin===null?'':F.umin)+'–'+(F.umax===null?'':F.umax),
+      function(){ $('f-umin').value=''; $('f-umax').value=''; read(); });
+    if(F.omin!==null||F.omax!==null) add('Occupancy',(F.omin===null?'':F.omin)+'–'+(F.omax===null?'':F.omax),
+      function(){ $('f-omin').value=''; $('f-omax').value=''; read(); });
+  }
+
+  /* ---------- render ---------- */
+  function refresh(){
+    VIEW = applyFilters(DATA, F);
+    PIV = MODE === 'pivot' ? pivot(VIEW, GROUPKEY) : [];
+    if(sortCol) sortView();
+    var s = summarise(VIEW);
+    $('t-props').textContent  = fmt(s.properties);
+    $('t-units').textContent  = fmt(s.totalUnits);
+    $('t-assist').textContent = fmt(s.assistedUnits);
+    $('t-occ').textContent    = pct(s.avgOccupancy);
+    $('t-eli').textContent    = pct(s.avgELI);
+    $('count').innerHTML = MODE === 'pivot'
+      ? '<b>'+fmt(PIV.length)+'</b> '+(GROUPKEY==='Owner Name'?'owners':'managers')+
+        ' · '+fmt(VIEW.length)+' properties'
+      : '<b>'+fmt(VIEW.length)+'</b> of '+fmt(DATA.length)+' properties';
+    chips(); renderTable();
+  }
+  function sortView(){
+    if(MODE === 'pivot'){
+      var pc = null;
+      for(var i=0;i<PIVCOLS.length;i++) if(PIVCOLS[i].k === sortCol) pc = PIVCOLS[i];
+      if(!pc) return;
+      var d = sortDir;
+      PIV.sort(function(a,b){
+        var x = a[pc.k], y = b[pc.k];
+        if(pc.n){
+          if(x===null && y===null) return 0;
+          if(x===null) return 1;
+          if(y===null) return -1;
+          return (x-y)*d;
+        }
+        x = String(x||'').toLowerCase(); y = String(y||'').toLowerCase();
+        return x<y ? -d : x>y ? d : 0;
+      });
+      return;
+    }
+    var c = sortCol, dir = sortDir, isNum = NUMCOLS[c];
+    VIEW.sort(function(a,b){
+      var x = a[c], y = b[c];
+      if(isNum){
+        var nx = num(x), ny = num(y);
+        if(nx===null && ny===null) return 0;
+        if(nx===null) return 1;
+        if(ny===null) return -1;
+        return (nx-ny)*dir;
+      }
+      x = String(x||'').toLowerCase(); y = String(y||'').toLowerCase();
+      return x<y ? -dir : x>y ? dir : 0;
+    });
+  }
+  function renderTable(){
+    var rows, cols, pages;
+    if(MODE === 'pivot'){
+      cols = PIVCOLS;
+      pages = Math.max(1, Math.ceil(PIV.length/PAGE));
+      if(page >= pages) page = pages-1;
+      rows = PIV.slice(page*PAGE, page*PAGE+PAGE);
+      $('thead').innerHTML = '<tr>' + cols.map(function(c){
+        return '<th data-c="'+c.k+'"'+(c.n?' style="text-align:right"':'')+'>'+
+               (c.k==='group' ? (GROUPKEY==='Owner Name'?'Owner':'Manager') : c.label)+
+               (sortCol===c.k ? '<span class="ar">'+(sortDir>0?'▲':'▼')+'</span>' : '')+'</th>';
+      }).join('') + '</tr>';
+      var body = '';
+      if(!rows.length){
+        body = '<tr><td colspan="'+cols.length+'" style="padding:34px;text-align:center;color:var(--muted)">'+
+               'No rows match these filters.</td></tr>';
+      } else {
+        rows.forEach(function(r){
+          body += '<tr>';
+          cols.forEach(function(c){
+            var v = r[c.k];
+            if(c.pct) v = (v===null ? '' : v.toFixed(1)+'%');
+            else if(c.n) v = fmt(v);
+            body += '<td'+(c.n?' class="n"':'')+' title="'+String(r[c.k]===null?'':r[c.k]).replace(/"/g,'&quot;')+'">'+
+                    String(v===undefined||v===null?'':v).replace(/</g,'&lt;')+'</td>';
+          });
+          body += '</tr>';
+        });
+      }
+      $('tbody').innerHTML = body;
+      $('pinfo').textContent = PIV.length
+        ? 'Showing '+fmt(page*PAGE+1)+'–'+fmt(Math.min((page+1)*PAGE, PIV.length))+' · page '+(page+1)+' of '+pages
+        : 'No rows';
+    } else {
+      var dcols = COLS.filter(function(c){ return HEADERS.indexOf(c) !== -1; });
+      $('thead').innerHTML = '<tr>' + dcols.map(function(c){
+        return '<th data-c="'+c+'">'+c+(sortCol===c ? '<span class="ar">'+(sortDir>0?'▲':'▼')+'</span>' : '')+'</th>';
+      }).join('') + '</tr>';
+      pages = Math.max(1, Math.ceil(VIEW.length/PAGE));
+      if(page >= pages) page = pages-1;
+      var slice = VIEW.slice(page*PAGE, page*PAGE+PAGE);
+      var b2 = '';
+      if(!slice.length){
+        b2 = '<tr><td colspan="'+dcols.length+'" style="padding:34px;text-align:center;color:var(--muted)">'+
+             'No properties match these filters.</td></tr>';
+      } else {
+        slice.forEach(function(r){
+          b2 += '<tr>';
+          dcols.forEach(function(c){
+            var v = r[c] === undefined ? '' : r[c];
+            if(NUMCOLS[c] && c !== 'NHPDPropertyID'){
+              var n = num(v);
+              v = n === null ? '' : (c === 'Occupancy Rate' || c.indexOf('%') === 0 ? n.toFixed(1) : n.toLocaleString('en-US'));
+            }
+            b2 += '<td'+(NUMCOLS[c]?' class="n"':'')+' title="'+String(r[c]||'').replace(/"/g,'&quot;')+'">'+
+                  String(v).replace(/</g,'&lt;')+'</td>';
+          });
+          b2 += '</tr>';
+        });
+      }
+      $('tbody').innerHTML = b2;
+      $('pinfo').textContent = VIEW.length
+        ? 'Showing '+fmt(page*PAGE+1)+'–'+fmt(Math.min((page+1)*PAGE, VIEW.length))+' · page '+(page+1)+' of '+pages
+        : 'No rows';
+    }
+    Array.prototype.slice.call($('thead').querySelectorAll('th')).forEach(function(h){
+      h.onclick = function(){
+        var c = this.getAttribute('data-c');
+        if(sortCol === c) sortDir = -sortDir; else { sortCol = c; sortDir = MODE==='pivot' ? -1 : 1; }
+        refresh();
+      };
+    });
+    $('prev').disabled = page<=0; $('next').disabled = page>=pages-1;
+  }
+  $('prev').onclick = function(){ if(page>0){ page--; renderTable(); } };
+  $('next').onclick = function(){ page++; renderTable(); };
+
+  /* ---------- summary line / export ---------- */
+  function describe(){
+    var p = [];
+    if(F.states.length) p.push(F.states.join(', '));
+    if(F.counties.length) p.push(F.counties.join(', ')+' County');
+    if(F.city) p.push('city ~ '+F.city);
+    if(F.ownerTypes.length) p.push(F.ownerTypes.join(', '));
+    if(F.owner) p.push('owner ~ '+F.owner);
+    if(F.manager) p.push('manager ~ '+F.manager);
+    if(F.progs.length) p.push(F.progs.join(' + '));
+    if(F.umin!==null||F.umax!==null) p.push('units '+(F.umin===null?'0':F.umin)+'-'+(F.umax===null?'∞':F.umax));
+    if(F.omin!==null||F.omax!==null) p.push('occupancy '+(F.omin===null?'0':F.omin)+'-'+(F.omax===null?'100':F.omax));
+    return p.length ? p.join(' · ') : 'All properties';
+  }
+  function summaryLine(){
+    var s = summarise(VIEW);
+    var base = describe()+': '+fmt(s.properties)+' properties, '+fmt(s.totalUnits)+' units, '+
+               fmt(s.assistedUnits)+' assisted units, '+pct(s.avgOccupancy)+' avg occupancy';
+    if(MODE === 'pivot')
+      base = describe()+' — grouped by '+(GROUPKEY==='Owner Name'?'owner':'manager')+': '+
+             fmt(PIV.length)+' '+(GROUPKEY==='Owner Name'?'owners':'managers')+' across '+
+             fmt(s.properties)+' properties, '+fmt(s.totalUnits)+' units';
+    return base;
+  }
+  $('copy').onclick = function(){
+    var self = this, txt = summaryLine();
+    function done(){ self.textContent='Copied'; setTimeout(function(){ self.textContent='Copy summary'; },1400); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done, function(){ window.prompt('Copy:', txt); });
+    } else { window.prompt('Copy:', txt); }
+  };
+
+  function exportCols(){ return HEADERS.slice(); }
+  function stamp(){ return new Date().toISOString().slice(0,10); }
+  function saveBlob(blob, name){
+    var a = document.createElement('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = name; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(u); }, 1500);
+  }
+
+  $('exp-csv').onclick = function(){
+    var q = function(v){ v = v===undefined||v===null ? '' : String(v);
+                         return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+    var lines = ['# '+summaryLine()+' · exported '+stamp()];
+    if(MODE === 'pivot'){
+      lines.push(PIVCOLS.map(function(c){
+        return q(c.k==='group' ? (GROUPKEY==='Owner Name'?'Owner':'Manager') : c.label); }).join(','));
+      PIV.forEach(function(r){
+        lines.push(PIVCOLS.map(function(c){
+          var v = r[c.k];
+          if(c.pct) v = (v===null?'':v.toFixed(1));
+          return q(v);
+        }).join(','));
+      });
+    } else {
+      var cols = exportCols();
+      lines.push(cols.map(q).join(','));
+      VIEW.forEach(function(r){ lines.push(cols.map(function(c){ return q(r[c]); }).join(',')); });
+    }
+    saveBlob(new Blob([lines.join('\r\n')], {type:'text/csv;charset=utf-8'}),
+             (MODE==='pivot'?'summary-by-'+(GROUPKEY==='Owner Name'?'owner':'manager'):'property-finder')+
+             '-'+stamp()+'.csv');
+  };
+
+  /* Minimal store-mode (uncompressed) XLSX writer — no external library. */
+  function crcTable(){
+    var t = new Uint32Array(256);
+    for(var n=0;n<256;n++){ var c=n; for(var k=0;k<8;k++) c = (c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+    return t;
+  }
+  var CRCT = crcTable();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF;
+    for(var i=0;i<bytes.length;i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+    return (c ^ 0xFFFFFFFF)>>>0;
+  }
+  function zip(files){
+    var enc = new TextEncoder(), parts = [], central = [], offset = 0;
+    function u16(v){ return [v&255,(v>>8)&255]; }
+    function u32(v){ return [v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255]; }
+    files.forEach(function(f){
+      var nameB = enc.encode(f.name), dataB = enc.encode(f.data), c = crc32(dataB);
+      var lh = [].concat([0x50,0x4b,0x03,0x04], u16(20), u16(0), u16(0), u16(0), u16(0),
+                         u32(c), u32(dataB.length), u32(dataB.length), u16(nameB.length), u16(0));
+      parts.push(new Uint8Array(lh), nameB, dataB);
+      central.push({name:nameB, crc:c, size:dataB.length, off:offset});
+      offset += lh.length + nameB.length + dataB.length;
+    });
+    var cd = [], cdSize = 0;
+    central.forEach(function(e){
+      var h = [].concat([0x50,0x4b,0x01,0x02], u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+                        u32(e.crc), u32(e.size), u32(e.size), u16(e.name.length),
+                        u16(0), u16(0), u16(0), u16(0), u32(0), u32(e.off));
+      cd.push(new Uint8Array(h), e.name); cdSize += h.length + e.name.length;
+    });
+    var end = new Uint8Array([].concat([0x50,0x4b,0x05,0x06], u16(0), u16(0),
+                             u16(central.length), u16(central.length), u32(cdSize), u32(offset), u16(0)));
+    return new Blob(parts.concat(cd, [end]), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
+  function xesc(s){
+    return String(s===undefined||s===null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/\x00-\x08|\x0B|\x0C|\x0E-\x1F/g,'');
+  }
+  function colRef(i){ var s=''; i++; while(i>0){ var m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=(i-m-1)/26; } return s; }
+
+  $('exp-xlsx').onclick = function(){
+    var self = this; self.disabled = true; self.textContent = 'Building…';
+    setTimeout(function(){
+      try{
+        var cols = exportCols();
+        var rowsXml = [];
+        function rowXml(rIdx, cells){
+          var s = '<row r="'+rIdx+'">';
+          cells.forEach(function(c, i){
+            var ref = colRef(i)+rIdx;
+            if(c.n) s += '<c r="'+ref+'"><v>'+c.v+'</v></c>';
+            else s += '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xesc(c.v)+'</t></is></c>';
+          });
+          return s+'</row>';
+        }
+        rowsXml.push(rowXml(1, [{v:'# '+summaryLine()+' · exported '+stamp()}]));
+        if(MODE === 'pivot'){
+          rowsXml.push(rowXml(2, PIVCOLS.map(function(c){
+            return {v: c.k==='group' ? (GROUPKEY==='Owner Name'?'Owner':'Manager') : c.label}; })));
+          PIV.forEach(function(r, i){
+            rowsXml.push(rowXml(i+3, PIVCOLS.map(function(c){
+              var v = r[c.k];
+              if(c.n) return v === null ? {v:''} : {v: c.pct ? Math.round(v*10)/10 : v, n:true};
+              return {v:v};
+            })));
+          });
+        } else {
+          rowsXml.push(rowXml(2, cols.map(function(c){ return {v:c}; })));
+          VIEW.forEach(function(r, i){
+            rowsXml.push(rowXml(i+3, cols.map(function(c){
+              var raw = r[c], n = NUMCOLS[c] ? num(raw) : null;
+              return n !== null ? {v:n, n:true} : {v:raw};
+            })));
+          });
+        }
+        var sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+          '<sheetData>'+rowsXml.join('')+'</sheetData></worksheet>';
+        var files = [
+          {name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+            '<Default Extension="xml" ContentType="application/xml"/>'+
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+          {name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+          {name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+            '<sheets><sheet name="'+(MODE==='pivot'?'Summary':'Filtered Properties')+'" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+          {name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
+          {name:'xl/worksheets/sheet1.xml', data:sheet}
+        ];
+        saveBlob(zip(files),
+          (MODE==='pivot'?'summary-by-'+(GROUPKEY==='Owner Name'?'owner':'manager'):'property-finder')+
+          '-'+stamp()+'.xlsx');
+      }catch(err){
+        alert('Export failed: '+err.message);
+      }
+      self.disabled = false; self.textContent = 'Export Excel';
+    }, 30);
+  };
+})();
+</script>
+</body>
+</html>
