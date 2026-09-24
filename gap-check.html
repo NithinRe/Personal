@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gap Check — capture-interval analyser</title>
+<style>
+  :root{
+    --paper:#EDF0F3;
+    --card:#FFFFFF;
+    --ink:#0E141A;
+    --ink-2:#4A5764;
+    --ink-3:#8695A3;
+    --rule:#CBD5DE;
+    --scope:#0E141A;
+    --signal:#3FD2C7;
+    --cut:#FF5C7A;
+    --warn:#B8631A;
+    --ok:#1E7A5E;
+    --mono:ui-monospace,"SF Mono",Menlo,"JetBrains Mono",Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+
+  header{border-bottom:1px solid var(--rule);padding-bottom:16px;margin-bottom:24px}
+  h1{
+    font-family:var(--mono);font-size:19px;font-weight:600;
+    letter-spacing:-0.02em;margin:0 0 4px;
+  }
+  h1 .dim{color:var(--ink-3);font-weight:400}
+  header p{margin:0;color:var(--ink-2);font-size:13px;max-width:60ch}
+
+  /* ---------- drop ---------- */
+  .drop{
+    border:1.5px dashed var(--rule);border-radius:10px;background:var(--card);
+    padding:44px 20px;text-align:center;cursor:pointer;transition:.15s;
+  }
+  .drop:hover,.drop.hot{border-color:var(--ink-2);background:#fff}
+  .drop strong{display:block;font-size:15px;margin-bottom:4px}
+  .drop span{color:var(--ink-3);font-size:12.5px;font-family:var(--mono)}
+  .drop.slim{padding:14px 18px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:16px}
+  .drop.slim strong{margin:0;font-size:13px}
+
+  /* ---------- readout ---------- */
+  .readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:8px;overflow:hidden;margin-top:18px}
+  .readout div{background:var(--card);padding:11px 13px}
+  .readout .k{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-family:var(--mono)}
+  .readout .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:2px}
+  .readout .v small{font-size:11px;font-weight:400;color:var(--ink-3)}
+
+  /* ---------- verdict ---------- */
+  .verdict{margin-top:18px;border-radius:8px;padding:15px 17px;border:1px solid var(--rule);background:var(--card);border-left-width:4px}
+  .verdict.pass{border-left-color:var(--ok)}
+  .verdict.fail{border-left-color:var(--cut)}
+  .verdict.warn{border-left-color:var(--warn)}
+  .verdict h3{margin:0 0 5px;font-size:14.5px;font-family:var(--mono);letter-spacing:-.01em}
+  .verdict p{margin:0;font-size:13px;color:var(--ink-2)}
+
+  /* ---------- flags ---------- */
+  .flags{margin-top:14px;display:flex;flex-direction:column;gap:7px}
+  .flag{display:flex;gap:10px;background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--warn);border-radius:6px;padding:10px 13px;font-size:13px}
+  .flag.bad{border-left-color:var(--cut)}
+  .flag .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;padding-top:2px}
+  .flag .m{color:var(--ink-2)}
+  .flag .m b{color:var(--ink);font-weight:600}
+
+  /* ---------- section ---------- */
+  section{margin-top:30px}
+  .shead{display:flex;align-items:baseline;gap:11px;margin-bottom:11px}
+  .shead h2{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin:0;font-weight:600}
+  .shead .note{font-size:12.5px;color:var(--ink-3)}
+
+  /* ---------- scope ---------- */
+  .scope{background:var(--scope);border-radius:10px;padding:18px 20px 12px}
+  .scope svg{display:block;width:100%;height:auto}
+  .scope .legend{display:flex;gap:18px;margin-top:8px;font-family:var(--mono);font-size:10.5px;color:#7A8A99;flex-wrap:wrap}
+  .scope .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  /* ---------- controls ---------- */
+  .ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:15px 17px;margin-top:14px}
+  .ctl label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+  .ctl input[type=range]{width:100%;accent-color:var(--ink)}
+  .ctl input[type=number]{width:100%;font-family:var(--mono);font-size:13px;padding:5px 7px;border:1px solid var(--rule);border-radius:5px;background:#fff;color:var(--ink)}
+  .ctl .val{font-family:var(--mono);font-size:13px;font-weight:600}
+  .toggles{display:flex;flex-direction:column;gap:7px;justify-content:center}
+  .toggles label{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:12.5px;font-family:var(--sans);color:var(--ink);margin:0;cursor:pointer}
+  .toggles input{accent-color:var(--ink);width:15px;height:15px}
+
+  /* ---------- timeline ---------- */
+  .tl{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:16px}
+  .tl svg{display:block;width:100%;height:auto}
+
+  /* ---------- photo list ---------- */
+  .plist{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--card);max-height:520px;overflow-y:auto}
+  .prow{display:grid;grid-template-columns:26px 44px 1fr 82px 74px 60px;gap:11px;align-items:center;padding:6px 12px;border-bottom:1px solid #E7EBEF;font-size:12.5px}
+  .prow:last-child{border-bottom:0}
+  .prow.newgrp{border-top:2px solid var(--cut)}
+  .prow .mark{cursor:pointer;width:20px;height:20px;border:1.5px solid var(--rule);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;background:#fff}
+  .prow .mark.on{background:var(--cut);border-color:var(--cut);color:#fff}
+  .prow img{width:44px;height:34px;object-fit:cover;border-radius:3px;background:#E2E7EC;display:block}
+  .prow .ph{width:44px;height:34px;border-radius:3px;background:#E2E7EC;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:var(--ink-3)}
+  .prow .nm{font-family:var(--mono);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow .tm,.prow .gp{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+  .prow .gap{font-family:var(--mono);font-size:11.5px;text-align:right;color:var(--ink-3)}
+  .prow .gap.big{color:var(--cut);font-weight:600}
+  .prow .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:0}
+
+  .hint{font-size:12.5px;color:var(--ink-2);margin:0 0 10px}
+
+  /* ---------- score ---------- */
+  .score{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+  .score div{background:var(--card);padding:12px 14px}
+  .score .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  .score .v{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:3px}
+
+  button.act{
+    font-family:var(--mono);font-size:12px;letter-spacing:.03em;
+    background:var(--ink);color:#fff;border:0;border-radius:6px;
+    padding:9px 15px;cursor:pointer;
+  }
+  button.act:hover{background:#233040}
+  button.act.ghost{background:#fff;color:var(--ink);border:1px solid var(--rule)}
+  button.act.ghost:hover{background:#F4F7F9}
+  .btnrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+
+  .hidden{display:none!important}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Gap Check <span class="dim">— capture-interval analyser</span></h1>
+  <p>Reads capture timestamps from your photos and shows whether the intervals between them fall into two populations: short gaps within a unit, long gaps while walking between units. Everything runs in this page. No upload, no network, no AI.</p>
+</header>
+
+<div id="drop" class="drop" tabindex="0" role="button" aria-label="Choose photos">
+  <strong>Drop your photos here</strong>
+  <span>or click to choose &nbsp;·&nbsp; JPG works best &nbsp;·&nbsp; files never leave this machine</span>
+</div>
+<input id="file" type="file" multiple accept="image/*,.jpg,.jpeg,.heic,.heif,.png,.tif,.tiff" class="hidden">
+
+<div id="progress" class="hint hidden" style="margin-top:12px"></div>
+
+<div id="results" class="hidden">
+
+  <div class="readout" id="readout"></div>
+  <div id="verdict"></div>
+  <div class="flags" id="flags"></div>
+
+  <section>
+    <div class="shead">
+      <h2>Gap spectrum</h2>
+      <span class="note">every interval between consecutive photos, on a log scale</span>
+    </div>
+    <div class="scope">
+      <svg id="spectrum" viewBox="0 0 1000 190" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><i style="background:#3FD2C7"></i>interval</span>
+        <span><i style="background:#FF5C7A"></i>split threshold</span>
+        <span>gaps left of the line stay together · gaps right of it start a new group</span>
+      </div>
+    </div>
+
+    <div class="ctl">
+      <div>
+        <label for="k">k &nbsp;(threshold = median + k × MAD)</label>
+        <input id="k" type="range" min="0.5" max="8" step="0.1" value="3">
+        <div class="val" id="kv">3.0</div>
+      </div>
+      <div>
+        <label for="floor">floor (seconds)</label>
+        <input id="floor" type="number" value="120" min="1">
+      </div>
+      <div>
+        <label for="ceil">ceiling (seconds)</label>
+        <input id="ceil" type="number" value="1800" min="1">
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" id="burst" checked> Collapse bursts before stats</label>
+        <label><input type="checkbox" id="bydev" checked> Separate by camera</label>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>Timeline</h2>
+      <span class="note">each photo in capture order, coloured by the group it landed in</span>
+    </div>
+    <div class="tl"><svg id="timeline" viewBox="0 0 1000 90" preserveAspectRatio="xMidYMid meet"></svg></div>
+  </section>
+
+  <section>
+    <div class="shead">
+      <h2>Ground truth</h2>
+      <span class="note">mark where a new unit really began</span>
+    </div>
+    <p class="hint">Work down the list with your notebook. Tick the first photo of each new unit. The first photo is always a start, so leave it. Ticking nothing scores nothing.</p>
+    <div class="plist" id="plist"></div>
+    <div class="btnrow">
+      <button class="act" id="scoreBtn">Score against my marks</button>
+      <button class="act ghost" id="clearBtn">Clear marks</button>
+      <button class="act ghost" id="csvBtn">Export CSV</button>
+    </div>
+    <div id="scoreOut" style="margin-top:14px"></div>
+  </section>
+
+</div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   EXIF — minimal reader. JPEG APP1 first, byte-scan fallback
+   so HEIC and TIFF usually work too.
+   ============================================================ */
+function str(view,off,len){let s="";for(let i=0;i<len;i++){const c=view.getUint8(off+i);if(c===0)break;s+=String.fromCharCode(c);}return s;}
+
+function findTiff(buf){
+  const view=new DataView(buf);
+  if(view.byteLength>4 && view.getUint16(0)===0xFFD8){
+    let off=2;
+    while(off<view.byteLength-4){
+      if(view.getUint8(off)!==0xFF){off++;continue;}
+      const m=view.getUint8(off+1);
+      if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){off+=2;continue;}
+      if(m===0xDA||m===0xD9)break;
+      if(off+4>view.byteLength)break;
+      const size=view.getUint16(off+2);
+      if(m===0xE1 && str(view,off+4,4)==="Exif")return off+10;
+      if(size<2)break;
+      off+=2+size;
+    }
+  }
+  const bytes=new Uint8Array(buf);
+  for(let i=0;i<bytes.length-8;i++){
+    if(bytes[i]===0x45&&bytes[i+1]===0x78&&bytes[i+2]===0x69&&bytes[i+3]===0x66&&bytes[i+4]===0&&bytes[i+5]===0)return i+6;
+  }
+  return -1;
+}
+
+const TYPE_SIZE={1:1,2:1,3:2,4:4,5:8,6:1,7:1,8:2,9:4,10:8,11:4,12:8};
+
+function readIFD(view,tiff,ifd,le){
+  const out={};
+  if(ifd+2>view.byteLength)return out;
+  const n=view.getUint16(ifd,le);
+  for(let i=0;i<n;i++){
+    const e=ifd+2+i*12;
+    if(e+12>view.byteLength)break;
+    const tag=view.getUint16(e,le);
+    const type=view.getUint16(e+2,le);
+    const count=view.getUint32(e+4,le);
+    const size=(TYPE_SIZE[type]||0)*count;
+    if(!size)continue;
+    let vo=e+8;
+    if(size>4){vo=tiff+view.getUint32(e+8,le);}
+    if(vo<0||vo+size>view.byteLength)continue;
+    let val;
+    try{
+      if(type===2){val=str(view,vo,count).trim();}
+      else if(type===5||type===10){
+        const a=[];
+        for(let j=0;j<count;j++){
+          const num=type===5?view.getUint32(vo+j*8,le):view.getInt32(vo+j*8,le);
+          const den=type===5?view.getUint32(vo+j*8+4,le):view.getInt32(vo+j*8+4,le);
+          a.push(den===0?0:num/den);
+        }
+        val=count===1?a[0]:a;
+      }
+      else if(type===3){const a=[];for(let j=0;j<count;j++)a.push(view.getUint16(vo+j*2,le));val=count===1?a[0]:a;}
+      else if(type===4){const a=[];for(let j=0;j<count;j++)a.push(view.getUint32(vo+j*4,le));val=count===1?a[0]:a;}
+      else if(type===1||type===7){const a=[];for(let j=0;j<Math.min(count,64);j++)a.push(view.getUint8(vo+j));val=a;}
+      else continue;
+    }catch(err){continue;}
+    out[tag]=val;
+  }
+  return out;
+}
+
+function parseExif(buf){
+  const tiff=findTiff(buf);
+  if(tiff<0)return null;
+  const view=new DataView(buf);
+  if(tiff+8>view.byteLength)return null;
+  const bo=view.getUint16(tiff,false);
+  const le = bo===0x4949 ? true : bo===0x4D4D ? false : null;
+  if(le===null)return null;
+  const ifd0Off=view.getUint32(tiff+4,le);
+  const ifd0=readIFD(view,tiff,tiff+ifd0Off,le);
+  const out={
+    make: ifd0[0x010F]||"",
+    model: ifd0[0x0110]||"",
+    dateTime: ifd0[0x0132]||""
+  };
+  if(ifd0[0x8769]!==undefined){
+    const ex=readIFD(view,tiff,tiff+ifd0[0x8769],le);
+    out.dateTimeOriginal = ex[0x9003]||ex[0x9004]||"";
+    out.subsec = ex[0x9291]||"";
+    out.bodySerial = ex[0xA431]||"";
+    out.offsetTime = ex[0x9011]||"";
+  }
+  if(ifd0[0x8825]!==undefined){
+    const g=readIFD(view,tiff,tiff+ifd0[0x8825],le);
+    const toDeg=a=>Array.isArray(a)&&a.length>=3 ? a[0]+a[1]/60+a[2]/3600 : null;
+    const lat=toDeg(g[2]), lon=toDeg(g[4]);
+    if(lat!==null)out.lat = (g[1]==="S"?-1:1)*lat;
+    if(lon!==null)out.lon = (g[3]==="W"?-1:1)*lon;
+    if(g[31]!==undefined)out.gpsErr=g[31];
+  }
+  return out;
+}
+
+function parseDT(s,subsec){
+  if(!s)return null;
+  const m=String(s).match(/(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if(!m)return null;
+  const t=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]).getTime();
+  const ms=subsec?parseInt(String(subsec).padEnd(3,"0").slice(0,3),10)||0:0;
+  return t+ms;
+}
+
+/* ============================================================ */
+let PHOTOS=[];
+let TRUE_MARKS=new Set();
+const PALETTE=["#2E6F9E","#1E7A5E","#8A5FA8","#B8631A","#3C7A7A","#9C4667","#5A6E1F","#3B5B8C","#7A5230","#4A7C59"];
+
+const $=id=>document.getElementById(id);
+const drop=$("drop"), fileIn=$("file");
+
+drop.addEventListener("click",()=>fileIn.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileIn.click();}});
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("hot");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("hot"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("hot");ingest(e.dataTransfer.files);});
+fileIn.addEventListener("change",e=>ingest(e.target.files));
+
+async function ingest(fileList){
+  const files=Array.from(fileList).filter(f=>/\.(jpe?g|heic|heif|png|tiff?|dng)$/i.test(f.name)||f.type.startsWith("image/"));
+  if(!files.length)return;
+  const prog=$("progress");
+  prog.classList.remove("hidden");
+  PHOTOS=[];TRUE_MARKS.clear();
+
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    if(i%5===0){
+      prog.textContent=`Reading ${i+1} of ${files.length}…`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+    let ex=null;
+    try{
+      const buf=await f.slice(0,1024*1024).arrayBuffer();
+      ex=parseExif(buf);
+    }catch(err){ex=null;}
+    const ts=ex?parseDT(ex.dateTimeOriginal||ex.dateTime,ex.subsec):null;
+    PHOTOS.push({
+      name:f.name,size:f.size,file:f,
+      ts, exif:ex,
+      device: ex&&(ex.make||ex.model) ? `${ex.make} ${ex.model}`.trim() : "unknown",
+      lat: ex?ex.lat:undefined, lon: ex?ex.lon:undefined,
+      url: /\.(jpe?g|png)$/i.test(f.name)?URL.createObjectURL(f):null
+    });
+  }
+  PHOTOS.sort((a,b)=>(a.ts??Infinity)-(b.ts??Infinity)||a.name.localeCompare(b.name));
+  prog.classList.add("hidden");
+  drop.classList.add("slim");
+  drop.innerHTML=`<strong>${PHOTOS.length} photos loaded</strong><span>click to load a different set</span>`;
+  $("results").classList.remove("hidden");
+  recompute();
+}
+
+/* ---------- stats ---------- */
+const median=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+
+function buildGaps(list,collapseBursts){
+  const raw=[];
+  for(let i=1;i<list.length;i++)raw.push((list[i].ts-list[i-1].ts)/1000);
+  if(!collapseBursts)return raw;
+  return raw.filter(g=>g>2);
+}
+
+function compute(){
+  const timed=PHOTOS.filter(p=>p.ts!==null&&p.ts!==undefined);
+  const byDev=$("bydev").checked;
+  const collapse=$("burst").checked;
+  const k=parseFloat($("k").value);
+  const fl=parseFloat($("floor").value)||1;
+  const ce=parseFloat($("ceil").value)||1800;
+
+  const streams = byDev
+    ? Object.values(timed.reduce((acc,p)=>{(acc[p.device]=acc[p.device]||[]).push(p);return acc;},{}))
+    : [timed];
+
+  const statGaps=[];
+  streams.forEach(s=>statGaps.push(...buildGaps(s,collapse)));
+  const med=median(statGaps);
+  const mad=median(statGaps.map(g=>Math.abs(g-med)));
+  let T=med+k*mad;
+  T=Math.max(fl,Math.min(ce,T));
+
+  // assign groups
+  let gid=0;
+  const allGaps=[];
+  streams.forEach(stream=>{
+    stream.forEach((p,i)=>{
+      if(i===0){gid++;}
+      else{
+        const g=(p.ts-stream[i-1].ts)/1000;
+        allGaps.push(g);
+        if(g>T)gid++;
+      }
+      p.group=gid;
+    });
+  });
+
+  PHOTOS.filter(p=>p.ts===null||p.ts===undefined).forEach(p=>p.group=null);
+
+  return {timed,streams,statGaps,allGaps,med,mad,T,k,groups:gid};
+}
+
+/* ---------- bimodality ---------- */
+function separation(gaps){
+  const pos=gaps.filter(g=>g>0.05).sort((a,b)=>a-b);
+  if(pos.length<6)return null;
+  let best=0,at=0;
+  for(let i=1;i<pos.length;i++){
+    const r=pos[i]/pos[i-1];
+    if(r>best){best=r;at=i;}
+  }
+  const lowN=at, highN=pos.length-at;
+  return {ratio:best, lowN, highN, boundary:pos[at-1], next:pos[at]};
+}
+
+/* ---------- render ---------- */
+function fmtSec(s){
+  if(s===null||s===undefined||!isFinite(s))return "—";
+  if(s<60)return s.toFixed(s<10?1:0)+"s";
+  if(s<3600)return Math.floor(s/60)+"m "+Math.round(s%60)+"s";
+  return (s/3600).toFixed(1)+"h";
+}
+function fmtTime(ts){
+  if(!ts)return "—";
+  const d=new Date(ts);
+  const p=n=>String(n).padStart(2,"0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function recompute(){
+  $("kv").textContent=parseFloat($("k").value).toFixed(1);
+  const S=compute();
+  renderReadout(S);
+  renderVerdict(S);
+  renderFlags(S);
+  renderSpectrum(S);
+  renderTimeline(S);
+  renderList(S);
+  $("scoreOut").innerHTML="";
+}
+
+function renderReadout(S){
+  const missing=PHOTOS.length-S.timed.length;
+  const devs=new Set(S.timed.map(p=>p.device));
+  const span=S.timed.length>1?(S.timed[S.timed.length-1].ts-S.timed[0].ts)/1000:0;
+  $("readout").innerHTML=`
+    <div><div class="k">photos</div><div class="v">${PHOTOS.length}</div></div>
+    <div><div class="k">no timestamp</div><div class="v" style="${missing?'color:var(--cut)':''}">${missing}</div></div>
+    <div><div class="k">cameras</div><div class="v" style="${devs.size>1?'color:var(--warn)':''}">${devs.size}</div></div>
+    <div><div class="k">total span</div><div class="v">${fmtSec(span)}</div></div>
+    <div><div class="k">median gap</div><div class="v">${fmtSec(S.med)}</div></div>
+    <div><div class="k">MAD</div><div class="v">${fmtSec(S.mad)}</div></div>
+    <div><div class="k">threshold</div><div class="v" style="color:var(--cut)">${fmtSec(S.T)}</div></div>
+    <div><div class="k">groups found</div><div class="v">${S.groups}</div></div>`;
+}
+
+function renderVerdict(S){
+  const el=$("verdict");
+  const sep=separation(S.allGaps);
+  if(S.timed.length<4){
+    el.className="verdict warn";
+    el.innerHTML=`<h3>Not enough timed photos</h3><p>Load at least a dozen photos with capture times before reading anything into this.</p>`;
+    return;
+  }
+  if(!sep){
+    el.className="verdict warn";
+    el.innerHTML=`<h3>Too few intervals to judge</h3><p>Need more photos to tell one population from two.</p>`;
+    return;
+  }
+  const ratioTxt=sep.ratio.toFixed(1)+"×";
+  if(sep.ratio>=4){
+    el.className="verdict pass";
+    el.innerHTML=`<h3>Two populations, clearly separated</h3>
+      <p>The biggest jump between sorted intervals is <b>${ratioTxt}</b> — from ${fmtSec(sep.boundary)} to ${fmtSec(sep.next)}.
+      ${sep.lowN} short intervals, ${sep.highN} long ones. Shooting looks distinguishable from walking, which is what the grouping algorithm needs.</p>`;
+  }else if(sep.ratio>=2){
+    el.className="verdict warn";
+    el.innerHTML=`<h3>Some separation, but soft</h3>
+      <p>Biggest jump is only <b>${ratioTxt}</b>. Boundaries exist but overlap. Expect the threshold to misplace some splits — check how many corrections that costs you below.</p>`;
+  }else{
+    el.className="verdict fail";
+    el.innerHTML=`<h3>One population — no usable boundary</h3>
+      <p>Biggest jump is <b>${ratioTxt}</b>. Intervals form a smooth spread with no natural cut. Timestamps alone cannot group this set, and forcing a threshold will produce confident nonsense.</p>`;
+  }
+}
+
+function renderFlags(S){
+  const f=[];
+  const missing=PHOTOS.length-S.timed.length;
+  const devs=[...new Set(S.timed.map(p=>p.device))];
+
+  if(missing===PHOTOS.length&&PHOTOS.length){
+    f.push(["bad","no exif","Not one photo carries a capture time. Something stripped the metadata — a messaging app, a re-export, or a screenshot. Transfer the originals by cable or a sync client that preserves EXIF."]);
+  }else if(missing>0){
+    f.push(["bad","partial exif",`<b>${missing}</b> photos have no capture time and sit outside every group. Never fall back to file dates — copying resets them.`]);
+  }
+  if(devs.length>1){
+    f.push(["","two cameras",`Photos come from <b>${devs.length}</b> devices (${devs.join(", ")}). Their clocks are almost certainly offset. Keep "Separate by camera" on, or every boundary lands wrong.`]);
+  }
+  const bursts=S.allGaps.filter(g=>g<=2).length;
+  if(bursts>0){
+    f.push(["","bursts",`<b>${bursts}</b> intervals under 2s. Burst frames drag the median toward zero and flatten MAD. Toggle burst collapsing to see how much it moves the threshold.`]);
+  }
+  if(S.med>0&&S.mad/S.med<0.2&&S.allGaps.length>5){
+    f.push(["bad","uniform pace",`MAD is only <b>${(100*S.mad/S.med).toFixed(0)}%</b> of the median. Steady pacing leaves no anomalous gaps to detect, so the threshold has nothing to find. This is the failure mode where the algorithm splits almost everywhere or nowhere.`]);
+  }
+  if(S.allGaps.length<10){
+    f.push(["","thin sample",`Only <b>${S.allGaps.length}</b> intervals. Median and MAD are unstable below about ten — treat the threshold as a guess.`]);
+  }
+  const dst=S.allGaps.filter(g=>Math.abs(g-3600)<5).length;
+  if(dst>0){
+    f.push(["","clock jump",`<b>${dst}</b> interval(s) sit within seconds of exactly one hour. That pattern usually means a timezone or DST change, not a real pause.`]);
+  }
+  const withGps=S.timed.filter(p=>p.lat!==undefined).length;
+  if(withGps===0&&S.timed.length){
+    f.push(["","no location","No GPS on any photo. Fine for this test — but it removes the fallback signal the design leans on for merge suggestions."]);
+  }else if(withGps<S.timed.length){
+    f.push(["","partial location",`GPS on <b>${withGps}</b> of ${S.timed.length}. Indoors it drops out or drifts, which is exactly why location should only ever suggest a merge, never force one.`]);
+  }
+  const big=S.allGaps.filter(g=>g>1800).length;
+  if(big>0){
+    f.push(["","long pause",`<b>${big}</b> gap(s) over 30 minutes. A break rather than a walk. Splitting there may cut one unit in half.`]);
+  }
+
+  $("flags").innerHTML=f.map(([cls,t,m])=>
+    `<div class="flag ${cls}"><span class="t">${t}</span><span class="m">${m}</span></div>`).join("");
+}
+
+function renderSpectrum(S){
+  const svg=$("spectrum");
+  const W=1000,H=190,L=48,R=22,TOP=22,BOT=44;
+  const gaps=S.allGaps.filter(g=>g>0);
+  if(!gaps.length){svg.innerHTML="";return;}
+  const lo=Math.log10(Math.max(0.1,Math.min(...gaps)*0.7));
+  const hi=Math.log10(Math.max(...gaps)*1.4);
+  const x=v=>L+((Math.log10(v)-lo)/(hi-lo))*(W-L-R);
+
+  let ticks="";
+  [1,10,60,300,600,1800,3600,7200].forEach(t=>{
+    if(Math.log10(t)<lo||Math.log10(t)>hi)return;
+    const px=x(t);
+    ticks+=`<line x1="${px}" y1="${TOP}" x2="${px}" y2="${H-BOT}" stroke="#1E2A36" stroke-width="1"/>
+            <text x="${px}" y="${H-BOT+16}" fill="#5D6E7D" font-family="ui-monospace,monospace" font-size="10" text-anchor="middle">${fmtSec(t)}</text>`;
+  });
+
+  // jitter marks vertically so overlaps show
+  let marks="";
+  gaps.forEach((g,i)=>{
+    const px=x(g);
+    const y=TOP+8+((i*37)%(H-BOT-TOP-20));
+    const over=g>S.T;
+    marks+=`<circle cx="${px.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${over?'#FF5C7A':'#3FD2C7'}" opacity="0.85"/>`;
+  });
+
+  const tx=x(Math.max(0.1,S.T));
+  const thr=`<line x1="${tx}" y1="${TOP-6}" x2="${tx}" y2="${H-BOT+4}" stroke="#FF5C7A" stroke-width="2"/>
+    <text x="${tx}" y="${TOP-10}" fill="#FF5C7A" font-family="ui-monospace,monospace" font-size="11" text-anchor="middle">T = ${fmtSec(S.T)}</text>`;
+
+  svg.innerHTML=`<rect x="0" y="0" width="${W}" height="${H}" fill="none"/>
+    ${ticks}
+    <line x1="${L}" y1="${H-BOT}" x2="${W-R}" y2="${H-BOT}" stroke="#2A3947" stroke-width="1"/>
+    ${marks}${thr}
+    <text x="${L}" y="${H-10}" fill="#5D6E7D" font-family="ui-monospace,monospace" font-size="10">shorter</text>
+    <text x="${W-R}" y="${H-10}" fill="#5D6E7D" font-family="ui-monospace,monospace" font-size="10" text-anchor="end">longer</text>`;
+}
+
+function renderTimeline(S){
+  const svg=$("timeline");
+  const list=S.timed;
+  if(list.length<2){svg.innerHTML="";return;}
+  const W=1000,H=90,L=14,R=14,Y=44;
+  const t0=list[0].ts,t1=list[list.length-1].ts;
+  const x=t=>L+((t-t0)/Math.max(1,t1-t0))*(W-L-R);
+  let out="";
+  let prevG=null;
+  list.forEach(p=>{
+    const c=PALETTE[(p.group-1)%PALETTE.length];
+    if(prevG!==null&&p.group!==prevG){
+      out+=`<line x1="${x(p.ts).toFixed(1)}" y1="18" x2="${x(p.ts).toFixed(1)}" y2="70" stroke="#FF5C7A" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+    }
+    prevG=p.group;
+    out+=`<circle cx="${x(p.ts).toFixed(1)}" cy="${Y}" r="4.5" fill="${c}" opacity="0.9"/>`;
+  });
+  out+=`<line x1="${L}" y1="${Y}" x2="${W-R}" y2="${Y}" stroke="#CBD5DE" stroke-width="1" opacity="0.6"/>`;
+  out+=`<text x="${L}" y="84" fill="#8695A3" font-family="ui-monospace,monospace" font-size="10">${fmtTime(t0)}</text>
+        <text x="${W-R}" y="84" fill="#8695A3" font-family="ui-monospace,monospace" font-size="10" text-anchor="end">${fmtTime(t1)}</text>`;
+  svg.innerHTML=out;
+}
+
+function renderList(S){
+  const el=$("plist");
+  const rows=PHOTOS.map((p,i)=>{
+    const prev=i>0?PHOTOS[i-1]:null;
+    const gap=(p.ts&&prev&&prev.ts)?(p.ts-prev.ts)/1000:null;
+    const isNew=i>0&&p.group!==null&&prev.group!==p.group;
+    const c=p.group?PALETTE[(p.group-1)%PALETTE.length]:"#C0C8D0";
+    const marked=TRUE_MARKS.has(i);
+    const thumb=p.url?`<img src="${p.url}" alt="" loading="lazy">`:`<div class="ph">no&nbsp;preview</div>`;
+    return `<div class="prow ${isNew?'newgrp':''}" data-i="${i}">
+      <div class="mark ${marked?'on':''}" data-mark="${i}" role="checkbox" aria-checked="${marked}" tabindex="0" title="new unit starts here">✓</div>
+      ${thumb}
+      <div class="nm" title="${p.name}">${p.name}</div>
+      <div class="tm">${p.ts?fmtTime(p.ts):'<span style="color:var(--cut)">no time</span>'}</div>
+      <div class="gp"><span class="swatch" style="background:${c}"></span>${p.group??'—'}</div>
+      <div class="gap ${gap!==null&&gap>S.T?'big':''}">${gap===null?'':fmtSec(gap)}</div>
+    </div>`;
+  }).join("");
+  el.innerHTML=rows;
+  el.querySelectorAll("[data-mark]").forEach(m=>{
+    const toggle=()=>{
+      const i=+m.dataset.mark;
+      if(TRUE_MARKS.has(i))TRUE_MARKS.delete(i);else TRUE_MARKS.add(i);
+      m.classList.toggle("on");
+      m.setAttribute("aria-checked",TRUE_MARKS.has(i));
+    };
+    m.addEventListener("click",toggle);
+    m.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}});
+  });
+}
+
+/* ---------- scoring ---------- */
+function scoreNow(){
+  const S=compute();
+  const idx=PHOTOS.map((p,i)=>i).filter(i=>PHOTOS[i].ts!==null&&PHOTOS[i].ts!==undefined);
+  if(!TRUE_MARKS.size){
+    $("scoreOut").innerHTML=`<div class="flag"><span class="t">nothing marked</span><span class="m">Tick the first photo of each unit, then score.</span></div>`;
+    return;
+  }
+  const predB=new Set(), trueB=new Set();
+  for(let j=1;j<idx.length;j++){
+    const i=idx[j],prev=idx[j-1];
+    if(PHOTOS[i].group!==PHOTOS[prev].group)predB.add(i);
+    if(TRUE_MARKS.has(i))trueB.add(i);
+  }
+  let hit=0;trueB.forEach(b=>{if(predB.has(b))hit++;});
+  const falseSplits=[...predB].filter(b=>!trueB.has(b)).length;
+  const missed=[...trueB].filter(b=>!predB.has(b)).length;
+  const prec=predB.size?hit/predB.size:0;
+  const rec=trueB.size?hit/trueB.size:0;
+  const f1=(prec+rec)?2*prec*rec/(prec+rec):0;
+
+  // photo-level agreement
+  const trueGroup=[];let g=0;
+  idx.forEach((i,j)=>{if(j===0||TRUE_MARKS.has(i))g++;trueGroup[i]=g;});
+  const buckets={};
+  idx.forEach(i=>{
+    const key=trueGroup[i]+"|"+PHOTOS[i].group;
+    buckets[key]=(buckets[key]||0)+1;
+  });
+  const byTrue={};
+  Object.entries(buckets).forEach(([k,v])=>{
+    const t=k.split("|")[0];
+    byTrue[t]=Math.max(byTrue[t]||0,v);
+  });
+  const agree=Object.values(byTrue).reduce((a,b)=>a+b,0);
+  const acc=idx.length?agree/idx.length:0;
+  const corrections=falseSplits+missed;
+  const per100=idx.length?(corrections/idx.length*100):0;
+
+  $("scoreOut").innerHTML=`
+    <div class="score">
+      <div><div class="k">photo accuracy</div><div class="v" style="color:${acc>=0.85?'var(--ok)':acc>=0.7?'var(--warn)':'var(--cut)'}">${(acc*100).toFixed(0)}%</div></div>
+      <div><div class="k">boundary F1</div><div class="v">${(f1*100).toFixed(0)}%</div></div>
+      <div><div class="k">true units</div><div class="v">${trueB.size+1}</div></div>
+      <div><div class="k">found units</div><div class="v">${predB.size+1}</div></div>
+      <div><div class="k">over-splits <small>cheap</small></div><div class="v" style="color:var(--warn)">${falseSplits}</div></div>
+      <div><div class="k">under-splits <small>costly</small></div><div class="v" style="color:var(--cut)">${missed}</div></div>
+      <div><div class="k">fixes / 100 photos</div><div class="v">${per100.toFixed(1)}</div></div>
+    </div>
+    <p class="hint" style="margin-top:11px">Target in the PRD is 85% photo accuracy and under 15 corrections per 100 photos. Over-splits mean one unit spread across two groups — a reviewer merges them. Under-splits mean two units blended into one group, which is what corrupts reconciliation.</p>`;
+}
+
+/* ---------- export ---------- */
+function exportCSV(){
+  const S=compute();
+  const head=["filename","capture_time","epoch_ms","gap_before_s","device","lat","lon","predicted_group","marked_new_unit"];
+  const lines=[head.join(",")];
+  PHOTOS.forEach((p,i)=>{
+    const prev=i>0?PHOTOS[i-1]:null;
+    const gap=(p.ts&&prev&&prev.ts)?((p.ts-prev.ts)/1000).toFixed(2):"";
+    lines.push([
+      `"${p.name.replace(/"/g,'""')}"`,
+      p.ts?new Date(p.ts).toISOString():"",
+      p.ts??"",
+      gap,
+      `"${p.device}"`,
+      p.lat!==undefined?p.lat.toFixed(6):"",
+      p.lon!==undefined?p.lon.toFixed(6):"",
+      p.group??"",
+      TRUE_MARKS.has(i)?"1":"0"
+    ].join(","));
+  });
+  const blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="gap-check.csv";
+  a.click();
+}
+
+["k","floor","ceil","burst","bydev"].forEach(id=>{
+  $(id).addEventListener("input",recompute);
+  $(id).addEventListener("change",recompute);
+});
+$("scoreBtn").addEventListener("click",scoreNow);
+$("clearBtn").addEventListener("click",()=>{TRUE_MARKS.clear();recompute();});
+$("csvBtn").addEventListener("click",exportCSV);
+</script>
+</body>
+</html>
